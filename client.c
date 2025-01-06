@@ -1,11 +1,9 @@
 #include <errno.h>      // Errno definitions
-// #include <signal.h>     // Signal handler definitions
 #include <stdio.h>      // Standard Input/Output definitions
 #include <stdlib.h>     // Standard library function definitions
 #include <unistd.h>     // POSIX Operating System API definitions
 #include <sys/types.h>  // Data types definitions
 #include <sys/socket.h> // Sockets definitions
-// #include <sys/wait.h>   // Waiting definitions
 #include <arpa/inet.h>
 #include <netinet/in.h> // Internet Address Family definitions
 #include <netdb.h>      // Address definitions
@@ -32,12 +30,12 @@ int main() {
         printf("Failed to connect to server: %s\n", strerror(errno)); // If connecting to the server fails then exit the program
         exit(0);
     } else {
-        char server_message[255];
+        char server_message[256];
         if ((recv(client_descriptor, server_message, sizeof(server_message), 0)) < 0){
-            printf("Failed to connect to server: %s\n", strerror(errno)); // If receiving the server's message fails then exit the program
+            printf("Failed to receive to server: %s\n", strerror(errno)); // If receiving the server's message fails then exit the program
             exit(0);
         }
-        printf("The server sent over the following message: %s\n", server_message);
+        printf("Recived: %s\n", server_message);
     }
     close(client_descriptor);
     return 0;
