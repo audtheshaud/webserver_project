@@ -37,6 +37,19 @@ int main() {
             exit(0);
         }
         printf("Recived: %s\n", server_message);
+        char message[32];
+        while(1){
+            printf("Enter a message to the server: ");
+            scanf("%31s", message);
+            if ((send(client_descriptor, message, strlen(message), 0)) < 0){  // Send the Client message using the Client's socket descriptor
+                printf("Failed to send on socket: %s\n", strerror(errno)); // If sending fails then exit the program
+                exit(0);
+            }
+            sleep(1);
+            if (strcmp(message, "exit") == 0){
+                break;
+            }
+        }
     }
     close(client_descriptor);
     return 0;

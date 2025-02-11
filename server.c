@@ -43,8 +43,14 @@ void *handle_client(void *args)
         printf("Failed to send on socket: %s\n", strerror(errno)); // If sending fails then exit the program
         exit(0);
     }
-
-    sleep(10);
+    char client_message[32];
+    while(strcmp(client_message, "exit") != 0){
+        if ((recv(arguments->client_sd, client_message, sizeof(client_message), 0)) < 0){
+            printf("Failed to receive to server: %s\n", strerror(errno)); // If receiving the server's message fails then exit the program
+            exit(0);
+        }
+    }
+    printf("Client on Thread ID: %d disconnected\n", arguments->tid);
     // Client needs to send a "disconnect" message to the server
     shutdown(arguments->client_sd, SHUT_RDWR); // Shutdown the Client's socket descriptor to prevent reading and writing
     close(arguments->client_sd);               // Close the Client's socket descriptor
