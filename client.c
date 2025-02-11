@@ -4,7 +4,7 @@
 #include <unistd.h>     // POSIX Operating System API definitions
 #include <sys/types.h>  // Data types definitions
 #include <sys/socket.h> // Sockets definitions
-#include <arpa/inet.h>
+#include <arpa/inet.h>  // Internet definitions
 #include <netinet/in.h> // Internet Address Family definitions
 #include <netdb.h>      // Address definitions
 #include <limits.h>     // Limit definitions
@@ -30,7 +30,8 @@ int main() {
         printf("Failed to connect to server: %s\n", strerror(errno)); // If connecting to the server fails then exit the program
         exit(0);
     } else {
-        char server_message[256];
+        char server_message[64];
+        memset(&server_message, 0, sizeof(server_message));
         if ((recv(client_descriptor, server_message, sizeof(server_message), 0)) < 0){
             printf("Failed to receive to server: %s\n", strerror(errno)); // If receiving the server's message fails then exit the program
             exit(0);
