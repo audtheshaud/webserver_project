@@ -22,7 +22,7 @@ and then use the semaphore to know that a thread is no longer being used when it
 */
 
 int busy_threads[MAXTHREADCOUNT] = {0}; // Creates array of size MAXTHREADCOUNT for tracking busy threads, intitalized to 0
-// sem_t thread_lock;                                 // Locks threads, value is from 0 to 5
+sem_t thread_lock;                                 // Locks threads, value is from 0 to 5
 pthread_mutex_t mutex = PTHREAD_MUTEX_INITIALIZER; // Mutex for accessing array of busy threads
 
 struct args
@@ -34,7 +34,6 @@ struct args
 
 void *handle_client(void *args)
 { // Thread that handles each client by sending a server message and closing the connection
-    // sem_wait(&thread_lock);        // Mark the thread as being busy
     struct args *arguments = args; // Set struct of type struct void* to struct* args
     char tid_msg[32];
     snprintf(tid_msg, sizeof(tid_msg), ", Connected to thread id: %d", arguments->tid);
@@ -45,15 +44,15 @@ void *handle_client(void *args)
         exit(0);
     }
 
-    sleep(5);
-    // Client needs to send a disconnection message to the server
-    pthread_mutex_lock(&mutex);                // Lock the thread to change the value of busy threads
-    busy_threads[arguments->tid] = 0;          // Thread to  not busy by setting it to 0
-    pthread_mutex_unlock(&mutex);              // Unlock the thread
+    sleep(10);
+    // Client needs to send a "disconnect" message to the server
     shutdown(arguments->client_sd, SHUT_RDWR); // Shutdown the Client's socket descriptor to prevent reading and writing
     close(arguments->client_sd);               // Close the Client's socket descriptor
     free(arguments);                           // Free the arguments struct, requires the pointer to the struct
-    // sem_post(&thread_lock);                    // Mark the thread as being free
+    pthread_mutex_lock(&mutex);                // Lock the thread to change the value of busy threads
+    busy_threads[arguments->tid] = 0;          // Thread to not busy by setting it to 0
+    pthread_mutex_unlock(&mutex);              // Unlock the thread
+    sem_post(&thread_lock);                    // Mark the thread as being free
     return NULL; // Return from the thread
 }
 
@@ -114,33 +113,27 @@ int main()
     pthread_t threads[MAXTHREADCOUNT]; // Create a pool of threads
     struct args thread_args;
 
-    // sem_init(&thread_lock, 0, MAXTHREADCOUNT); // Creates a semphore with a value of 5
+    sem_init(&thread_lock, 0, MAXTHREADCOUNT); // Creates a semphore with a value of 5
 
     int lock_value;
-    int index;
+    int tid;
     while (1)
     {
-        pthread_mutex_lock(&mutex);
-        for (index = 0; index <= 5; index++)
-        {   
-            printf("Index: %d %d\n", index, busy_threads[index]);
-            if (busy_threads[index] == 0)
-            {
-                break;
+        sem_getvalue(&thread_lock, &lock_value);
+        if ( lock_value > 0){ // Check if there is a free thread using the Thread Lock Semaphore
+            pthread_mutex_lock(&mutex);
+            for (tid = 0; tid < 4; tid++) // If a thread is free, find the Thread ID 
+            {   
+                printf("Index: %d %d\n", tid, busy_threads[tid]);
+                if (busy_threads[tid] == 0)
+                {
+                    break;
+                }
             }
-        }
-        if (index > MAXTHREADCOUNT)
-        {
-            printf("All Threads are busy, please wait for a client to disconnect...\n");
-            sleep(3);
-            pthread_mutex_unlock(&mutex);
-            continue;
-        }
-        else
-        {
-            printf("Thread with tid: %d was found\n", index);
-            busy_threads[index] = 1;      // Thread to busy by setting it to 1
-            pthread_mutex_unlock(&mutex); // Unlock the thread
+            printf("Thread ID: %d was found\n", tid);   // Found Thread ID 
+            busy_threads[tid] = 1;                      // Set Thread ID to busy by setting it to 1
+            sem_wait(&thread_lock);                     // Mark the thread as being busy
+            pthread_mutex_unlock(&mutex);               // Unlock the thread
             if ((client_descriptor = accept(server_descriptor, (struct sockaddr *)&client_addr, &client_length)) < 0)
             {
                 printf("Failed to accept client on socket: %s\n", strerror(errno)); // If accepting fails then exit the program
@@ -155,18 +148,21 @@ int main()
             thread_args->client_sd = client_descriptor;                          // Save the Client Socket Descriptor to the Struct
             memset(thread_args->server_msg, 0, sizeof(thread_args->server_msg)); // Initialize the Server message to 0
             strcpy(thread_args->server_msg, server_message);                     // Save the server message to the Struct
-            thread_args->tid = index;                                            // Set the TID to the index of the for loop
+            thread_args->tid = tid;                                            // Set the TID to the index of the for loop
 
-            if ((pthread_create(&threads[index], NULL, handle_client, (void *)thread_args)) != 0) // Create the thread
+            if ((pthread_create(&threads[tid], NULL, handle_client, (void *)thread_args)) != 0) // Create the thread
             {
                 printf("Failed to create thread for client: %s\n", strerror(errno));
                 exit(0);
             }
-            if (pthread_detach(threads[index]) != 0) // Detach the thread to prevent Clients from terminating other Clients
+            if (pthread_detach(threads[tid]) != 0) // Detach the thread to prevent Clients from terminating other Clients
             {
                 printf("Failed to detach thread for client: %s\n", strerror(errno));
                 exit(0);
             }
+        } else {
+            printf("All Threads are busy, please wait for a client to disconnect...\n");
+            sleep(3);
         }
     }
 
@@ -233,5 +229,59 @@ int client_descriptor;
         printf("Failed to send on socket: %s\n", strerror(errno)); // If sending fails then exit the program
         exit(0);
     }
+
+    IMPORTANT CODE BELOW: 
+
+pthread_mutex_lock(&mutex);
+        for (index = 0; index <= 5; index++)
+        {   
+            printf("Index: %d %d\n", index, busy_threads[index]);
+            if (busy_threads[index] == 0)
+            {
+                break;
+            }
+        }
+        if (index > MAXTHREADCOUNT)
+        {
+            printf("All Threads are busy, please wait for a client to disconnect...\n");
+            sleep(3);
+            pthread_mutex_unlock(&mutex);
+            continue;
+        }
+        else
+        {
+            printf("Thread with tid: %d was found\n", index);
+            busy_threads[index] = 1;      // Thread to busy by setting it to 1
+            pthread_mutex_unlock(&mutex); // Unlock the thread
+            if ((client_descriptor = accept(server_descriptor, (struct sockaddr *)&client_addr, &client_length)) < 0)
+            {
+                printf("Failed to accept client on socket: %s\n", strerror(errno)); // If accepting fails then exit the program
+                exit(0);
+            }
+            char client_ip[INET_ADDRSTRLEN];                                       // Create a buffer to get the Client's IP Address
+            inet_ntop(AF_INET, &client_addr.sin_addr, client_ip, INET_ADDRSTRLEN); // IPv4 Network to Presentation
+            printf("Successfully connected to client: %s:%d\n", client_ip, ntohs(client_addr.sin_port));
+            printf("--------------------------------\n");
+
+            struct args *thread_args = malloc(sizeof(struct args));              // Dynamically allocate a Thread Argument Struct
+            thread_args->client_sd = client_descriptor;                          // Save the Client Socket Descriptor to the Struct
+            memset(thread_args->server_msg, 0, sizeof(thread_args->server_msg)); // Initialize the Server message to 0
+            strcpy(thread_args->server_msg, server_message);                     // Save the server message to the Struct
+            thread_args->tid = index;                                            // Set the TID to the index of the for loop
+
+            if ((pthread_create(&threads[index], NULL, handle_client, (void *)thread_args)) != 0) // Create the thread
+            {
+                printf("Failed to create thread for client: %s\n", strerror(errno));
+                exit(0);
+            }
+            if (pthread_detach(threads[index]) != 0) // Detach the thread to prevent Clients from terminating other Clients
+            {
+                printf("Failed to detach thread for client: %s\n", strerror(errno));
+                exit(0);
+            }
+        }
+
+
+
 
 */
