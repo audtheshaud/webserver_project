@@ -12,6 +12,7 @@
 #include <string.h>     // String definitions
 #include <pthread.h>    // Posix Threads
 #include <semaphore.h>  // Semaphore definitions
+#include <stdbool.h>
 
 #define PORT 5555        // Arbitrary port
 #define MAXTHREADCOUNT 5 // Maximum thread count
@@ -43,8 +44,18 @@ void *handle_client(void *args)
         printf("Failed to send on socket: %s\n", strerror(errno)); // If sending fails then exit the program
         exit(0);
     }
-
-    sleep(10);
+    char client_message[64];
+    bool connection = true;
+    while(connection){
+        if ((recv(arguments->client_sd, client_message, sizeof(client_message), 0)) < 0){
+            printf("Failed to receive to server: %s\n", strerror(errno)); // If receiving the server's message fails then exit the program
+            exit(0);
+        }
+        if (strcmp(client_message, "logout") != 0 || strcmp(client_message, "Logout") != 0){
+            connection = false;
+        }
+    }
+    printf("Client on Thread ID: %d disconnected\n", arguments->tid);
     // Client needs to send a "disconnect" message to the server
     shutdown(arguments->client_sd, SHUT_RDWR); // Shutdown the Client's socket descriptor to prevent reading and writing
     close(arguments->client_sd);               // Close the Client's socket descriptor
@@ -55,6 +66,7 @@ void *handle_client(void *args)
     sem_post(&thread_lock);                    // Mark the thread as being free
     return NULL; // Return from the thread
 }
+
 
 int main()
 {
@@ -281,6 +293,31 @@ pthread_mutex_lock(&mutex);
             }
         }
 
+
+
+void *handle_client(void *args)
+{ // Thread that handles each client by sending a server message and closing the connection
+    struct args *arguments = args; // Set struct of type struct void* to struct* args
+    char tid_msg[32];
+    snprintf(tid_msg, sizeof(tid_msg), ", Connected to thread id: %d", arguments->tid);
+    strcat(arguments->server_msg, tid_msg);
+    if ((send(arguments->client_sd, arguments->server_msg, strlen(arguments->server_msg), 0)) < 0)
+    {                                                              // Send the Server message using the Client's socket descriptor
+        printf("Failed to send on socket: %s\n", strerror(errno)); // If sending fails then exit the program
+        exit(0);
+    }
+
+    sleep(10);
+    // Client needs to send a "disconnect" message to the server
+    shutdown(arguments->client_sd, SHUT_RDWR); // Shutdown the Client's socket descriptor to prevent reading and writing
+    close(arguments->client_sd);               // Close the Client's socket descriptor
+    free(arguments);                           // Free the arguments struct, requires the pointer to the struct
+    pthread_mutex_lock(&mutex);                // Lock the thread to change the value of busy threads
+    busy_threads[arguments->tid] = 0;          // Thread to not busy by setting it to 0
+    pthread_mutex_unlock(&mutex);              // Unlock the thread
+    sem_post(&thread_lock);                    // Mark the thread as being free
+    return NULL; // Return from the thread
+}
 
 
 
