@@ -61,9 +61,9 @@ int Recv(int fd, void * buffer, size_t buf_size, int flags){
 }
 
 int send_chat_message(int fd){
-    char client_message[64];
-    bool connection = true;
-    while (connection){
+    char client_message[64];                                            // Create client message buffer
+    bool connection = true;                                             // Set connection to true before entering messaging loop
+    while (connection){                                                 // Prompts user to enter message to server until selecting to logout
         printf("Enter a message to the server: ");
         scanf("%63s", client_message);
         Send(fd, client_message, strlen(client_message), 0);
@@ -79,32 +79,3 @@ int Send(int fd, void *buffer, size_t buf_size, int flags){
         exit(0);
     }
 }
-
-
-/*
-if ((client_descriptor = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP)) < 0){ // Create socket that uses the IPv4 address family, Reliable Byte-stream, and TCP
-        printf("Failed to create TCP socket: %s\n", strerror(errno)); // If creating the socket fails then exit the program
-        exit(0);
-    }
-
-    client_addr_info.sin_family = AF_INET; // Set address family to IPv4
-    client_addr_info.sin_port = htons(PORT); // Set port using Host to Network Short
-    client_addr_info.sin_addr.s_addr = inet_addr("127.0.0.1"); // Allow any IP addresses available to the Host to connect
-    
-    int connect_status;
-    if ((connect_status=connect(client_descriptor, (struct sockaddr *)&client_addr_info, sizeof(client_addr_info))) < 0){
-        printf("Failed to connect to server: %s\n", strerror(errno)); // If connecting to the server fails then exit the program
-        exit(0);
-    } else {
-        char server_message[64];
-        memset(&server_message, 0, sizeof(server_message));
-        if ((recv(client_descriptor, server_message, sizeof(server_message), 0)) < 0){
-            printf("Failed to receive to server: %s\n", strerror(errno)); // If receiving the server's message fails then exit the program
-            exit(0);
-        }
-        printf("Recived: %s\n", server_message);
-    }
-    close(client_descriptor);
-    return 0;
-
-*/
