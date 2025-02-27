@@ -47,26 +47,28 @@ int Connect(int fd, struct sockaddr *addr, socklen_t length){
 }
 
 int recieve_server_message(int fd){
-    char server_message[64];                                            // Server message buffer
-    Recv(fd, server_message, strlen(server_message), 0);                // Call recv wrapper
+    char server_message[64];
+    memset(&server_message, 0, sizeof(server_message));                                            // Server message buffer
+    Recv(fd, server_message, sizeof(server_message), 0);                // Call recv wrapper
     printf("Recived: %s\n", server_message);                            // Print out the server message to the client's terminal
     return 0;
 }
 
-int Recv(int fd, void * buffer, size_t buf_size, int flags){
-    if (recv(fd, buffer,buf_size, flags) < 0){
+int Recv(int fd, void *buffer, size_t buf_size, int flags){
+    if (recv(fd, buffer, buf_size, flags) < 0){
         printf("Failed to receive to server: %s\n", strerror(errno));   // If receiving the server's message fails then exit the program
         exit(EXIT_FAILURE);
     }
 }
 
 int send_chat_message(int fd){
-    char client_message[64];                                            // Create client message buffer
+    char client_message[1024];                                          // Create client message buffer
     bool connection = true;                                             // Set connection to true before entering messaging loop
     while (connection){                                                 // Prompts user to enter message to server until selecting to logout
+        memset(&client_message, 0, sizeof(client_message));
         printf("Enter a message to the server: ");
         scanf("%63s", client_message);
-        Send(fd, client_message, strlen(client_message), 0);
+        Send(fd, client_message, sizeof(client_message), 0);
         if (strcmp(client_message, "logout") == 0 || strcmp(client_message, "Logout") == 0){
             connection = false;
         }

@@ -22,7 +22,7 @@ struct args {
 
 int create_server(int *fd, struct sockaddr_in *addr); /* Creates server socket descriptor and stores server details in an IPv4 socket address information struct */
 
-char get_server_message();
+int get_server_message(char *buffer, size_t buf_len);
 
 int Socket(int *fd, int domain, int sock_type, int protocol);   /* Wrapper for socket() */
 

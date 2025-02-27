@@ -8,9 +8,9 @@ Notes: use a mutex lock on an array of 0s and 1s (1s being busy) to keep track o
 and then use the semaphore to know that a thread is no longer being used when it decrements from 5
 */
 
-int busy_threads[MAXTHREADCOUNT] = {0}; // Creates array of size MAXTHREADCOUNT for tracking busy threads, intitalized to 0
-sem_t thread_lock;                                 // Locks threads, value is from 0 to 5
-pthread_mutex_t mutex = PTHREAD_MUTEX_INITIALIZER; // Mutex for accessing array of busy threads
+int busy_threads[MAXTHREADCOUNT] = {0};             // Creates array of size MAXTHREADCOUNT for tracking busy threads, intitalized to 0
+sem_t thread_lock;                                  // Locks threads, value is from 0 to 5
+pthread_mutex_t mutex = PTHREAD_MUTEX_INITIALIZER;  // Mutex for accessing array of busy threads
 
 
 void *handle_client(void *args)
@@ -24,14 +24,16 @@ void *handle_client(void *args)
         printf("Failed to send on socket: %s\n", strerror(errno)); // If sending fails then exit the program
         exit(0);
     }
-    char client_message[64];
+    char client_message[1024];
     bool connection = true;
     while(connection){
+        memset(&client_message, 0,sizeof(client_message));
         if ((recv(arguments->fd, client_message, sizeof(client_message), 0)) < 0){
             printf("Failed to receive to server: %s\n", strerror(errno)); // If receiving the server's message fails then exit the program
             exit(0);
         }
-        if (strcmp(client_message, "logout") != 0 || strcmp(client_message, "Logout") != 0){
+        printf("Client on tid = %d said: %s\n", arguments->tid, client_message);
+        if (strcmp(client_message, "logout") == 0 || strcmp(client_message, "Logout") == 0){
             connection = false;
         }
     }
@@ -53,28 +55,13 @@ int main()
     int server_fd;                      // Socket file descriptor
     struct sockaddr_in server_addr;     // Server socket address information for IPv4 addresses
     
-    char server_message = get_server_message();
+    char server_message[32];
+    get_server_message(server_message, sizeof(server_message));
 
     create_server(&server_fd, &server_addr);
 
-    if ((bind(server_fd, (struct sockaddr *)&server_addr, sizeof(server_addr))) < 0)
-    {                                                           // Bind the socket address (IPv4 + Port)
-        printf("Failed to bind socket: %s\n", strerror(errno)); // If binding the socket fails then exit the program
-        exit(0);
-    }
-
-    if ((listen(server_fd, 10)) < 0)
-    {                                                                // Listen for one client using Socket Descriptor
-        printf("Failed to listen on socket: %s\n", strerror(errno)); // If listening fails then exit the program
-        exit(0);
-    }
-    else
-    {
-        printf("Listening...\n");
-    }
     int client_descriptor;                         // Create a Client socket descriptor
     struct sockaddr_in client_addr;                // Create a socket address IPv4 struct for the Client
-    memset(&client_addr, 0, sizeof(client_addr));  // Initialize the Client socket address IPv4 struct to 0
     socklen_t client_length = sizeof(client_addr); // Get the length of the Client socket address IPv4 struct
 
     pthread_t threads[MAXTHREADCOUNT]; // Create a pool of threads
@@ -88,19 +75,8 @@ int main()
     {
         sem_getvalue(&thread_lock, &lock_value);
         if ( lock_value > 0){ // Check if there is a free thread using the Thread Lock Semaphore
-            pthread_mutex_lock(&mutex);
-            for (tid = 0; tid < 4; tid++) // If a thread is free, find the Thread ID 
-            {   
-                printf("Index: %d %d\n", tid, busy_threads[tid]);
-                if (busy_threads[tid] == 0)
-                {
-                    break;
-                }
-            }
-            printf("Thread ID: %d was found\n", tid);   // Found Thread ID 
-            busy_threads[tid] = 1;                      // Set Thread ID to busy by setting it to 1
-            sem_wait(&thread_lock);                     // Mark the thread as being busy
-            pthread_mutex_unlock(&mutex);               // Unlock the thread
+            thread_search(&tid);
+
             if ((client_descriptor = accept(server_fd, (struct sockaddr *)&client_addr, &client_length)) < 0)
             {
                 printf("Failed to accept client on socket: %s\n", strerror(errno)); // If accepting fails then exit the program
@@ -140,26 +116,25 @@ int main()
     return 0;
 }
 
-char get_server_message(){
+int get_server_message(char *buffer, size_t buf_len){
     int user_input;
     printf("Enter any number from 0-100: ");                                            // Prompt user for random number between 1-100
     while ((scanf("%3d", &user_input) != 1) || user_input < 1 || user_input > 100){     // Limiting scanf input to max of 3 characters, while checking num is between 1 and 100
         printf("Please re-enter a number between 0-100...\n");                          // Re-prompt the user if the input does not meet conditionals
     }
-    char id[4];                                     // Instantiate a buffer for the user_input to be converted to a string
-    snprintf(id, sizeof(id), "%d", user_input);     // Conversion of int to char
-    char message[32] = "Aud's Server: #";           // Instantiate the string containing the server's name and id
-    strcat(message, id);                            // Concatenate the server name and the id
-    return message;                                 // Return the server message
+    snprintf(buffer, buf_len, "Aud's server: #%d", user_input);
+    printf("%s\n", buffer);
+    return 0;
 }
 
 int create_server(int *fd, struct sockaddr_in *addr){
     Socket(fd, AF_INET, SOCK_STREAM, IPPROTO_TCP);
-    Setsockopt(*fd, SOL_SOCKET, SO_REUSEADDR, &(int){1}, sizeof(int));
+    int opt = 1;
+    Setsockopt(*fd, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt));
     addr->sin_family = AF_INET;                         // Set address family to IPv4
     addr->sin_port = htons(PORT);                       // Set port using Host to Network Short
     addr->sin_addr.s_addr = inet_addr("127.0.0.1");     // Allow any IP addresses available to the Host to connect
-    Bind(*fd, addr, sizeof(*addr));                     // Bind IP address and port to create socket address
+    Bind(*fd, (struct sockaddr *)addr, sizeof(*addr));                     // Bind IP address and port to create socket address
     Listen(*fd, 10);                                    // Listen on socket, allow 10 clients to queue up
 }
 
@@ -193,6 +168,22 @@ int Listen(int fd, int queued_clients){
         exit(0);
     }
     printf("Listening...\n");
+    return 0;
+}
+
+int thread_search(int *tid){
+    pthread_mutex_lock(&mutex);
+    for (int i = 0; i < 5; i++){   
+        printf("Index: %d %d\n", i, busy_threads[i]);
+        if (busy_threads[i] == 0){
+            *tid = i;
+            break;
+        }
+    }
+    printf("Thread ID: %d was found\n", *tid);  // Found Thread ID
+    busy_threads[*tid] = 1;                     // Set Thread ID to busy by setting it to 1
+    sem_wait(&thread_lock);                     // Mark the thread as being busy
+    pthread_mutex_unlock(&mutex);               // Unlock the thread
     return 0;
 }
 
@@ -375,4 +366,51 @@ int server_id;
     server_addr.sin_port = htons(PORT);                   // Set port using Host to Network Short
     server_addr.sin_addr.s_addr = inet_addr("127.0.0.1"); // Allow any IP addresses available to the Host to connect
 
+
+sem_getvalue(&thread_lock, &lock_value);
+        if ( lock_value > 0){ // Check if there is a free thread using the Thread Lock Semaphore
+            pthread_mutex_lock(&mutex);
+            for (tid = 0; tid < 4; tid++) // If a thread is free, find the Thread ID 
+            {   
+                printf("Index: %d %d\n", tid, busy_threads[tid]);
+                if (busy_threads[tid] == 0)
+                {
+                    break;
+                }
+            }
+            printf("Thread ID: %d was found\n", tid);   // Found Thread ID 
+            busy_threads[tid] = 1;                      // Set Thread ID to busy by setting it to 1
+            sem_wait(&thread_lock);                     // Mark the thread as being busy
+            pthread_mutex_unlock(&mutex);               // Unlock the thread
+            if ((client_descriptor = accept(server_fd, (struct sockaddr *)&client_addr, &client_length)) < 0)
+            {
+                printf("Failed to accept client on socket: %s\n", strerror(errno)); // If accepting fails then exit the program
+                exit(0);
+            }
+            char client_ip[INET_ADDRSTRLEN];                                       // Create a buffer to get the Client's IP Address
+            inet_ntop(AF_INET, &client_addr.sin_addr, client_ip, INET_ADDRSTRLEN); // IPv4 Network to Presentation
+            printf("Successfully connected to client: %s:%d\n", client_ip, ntohs(client_addr.sin_port));
+            printf("--------------------------------\n");
+
+            struct args *thread_args = malloc(sizeof(struct args));              // Dynamically allocate a Thread Argument Struct
+            thread_args->fd = client_descriptor;                          // Save the Client Socket Descriptor to the Struct
+            memset(thread_args->server_msg, 0, sizeof(thread_args->server_msg)); // Initialize the Server message to 0
+            strcpy(thread_args->server_msg, server_message);                     // Save the server message to the Struct
+            thread_args->tid = tid;                                            // Set the TID to the index of the for loop
+
+            if ((pthread_create(&threads[tid], NULL, handle_client, (void *)thread_args)) != 0) // Create the thread
+            {
+                printf("Failed to create thread for client: %s\n", strerror(errno));
+                exit(0);
+            }
+            if (pthread_detach(threads[tid]) != 0) // Detach the thread to prevent Clients from terminating other Clients
+            {
+                printf("Failed to detach thread for client: %s\n", strerror(errno));
+                exit(0);
+            }
+        } else {
+            printf("All Threads are busy, please wait for a client to disconnect...\n");
+            sleep(3);
+        }
+    }
 */

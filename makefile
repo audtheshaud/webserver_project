@@ -1,5 +1,5 @@
 CC		= gcc
-CFLAGS  = -Og
+CFLAGS  = -g
 
 default: all
 
