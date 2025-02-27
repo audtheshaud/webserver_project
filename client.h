@@ -11,8 +11,7 @@
 #include <string.h>     // String definitions
 #include <stdbool.h>    // Boolean definitions
 
-int create_client(int *fd, struct sockaddr_in *addr);           /* Creates and stores client details in a IPv4 socket address information struct */
-
+int create_client(int *fd, struct sockaddr_in *addr);           /* Creates client socket descriptor and stores server details in a IPv4 socket address information struct */
 
 int Socket(int *fd, int domain, int sock_type, int protocol);   /* Wrapper for socket() */
 

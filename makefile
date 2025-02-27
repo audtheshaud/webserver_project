@@ -5,7 +5,7 @@ default: all
 
 all: make_server make_client
 
-make_server: server.c
+make_server: server.c server.h
 	$(CC) $(CFLAGS) server.c -o server
 
 
